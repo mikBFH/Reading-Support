@@ -931,7 +931,7 @@
          box-shadow: 0 2px 10px rgba(0, 0, 0, 0.2);
          display: flex;
          padding: 5px;
-         z-index: 1000;
+         z-index: 2000;
          transition: all var(--transition-speed) ease;
          }
          .processed-content-container {
@@ -942,7 +942,7 @@
          box-shadow: 0 2px 10px rgba(0, 0, 0, 0.2);
          padding: 15px;
          max-width: 300px;
-         z-index: 1001;
+         z-index: 3001;
          cursor: move;
          }
          .processed-content-container .header {
@@ -1116,6 +1116,10 @@
          padding: 2px 5px;
          border-radius: 3px;
          transition: background-color 0.3s ease;
+
+         }
+         button.btn.btn-edit{
+             display:none !important;
          }
          .noteHolder .btn:hover {
          background-color: rgba(0,0,0,0.1);
@@ -1363,39 +1367,7 @@
             <i class='bx bx-menu' id="btn"></i>
          </div>
          <ul class="nav-list">
-            <!--<li>-->
-            <!--   <i class='bx bx-search'></i>-->
-            <!--   <input type="text" placeholder="Search...">-->
-            <!--   <span class="tooltip">Search</span>-->
-            <!--</li>-->
-            <!--<li>-->
-            <!--   <a href="#">-->
-            <!--   <i class='bx bx-user'></i>-->
-            <!--   <span class="links_name">User</span>-->
-            <!--   </a>-->
-            <!--   <span class="tooltip">User</span>-->
-            <!--</li>-->
-            <!--<li>-->
-            <!--   <a href="#">-->
-            <!--   <i class='bx bx-folder'></i>-->
-            <!--   <span class="links_name">Library</span>-->
-            <!--   </a>-->
-            <!--   <span class="tooltip">Library</span>-->
-            <!--</li>-->
-            <!--<li>-->
-            <!--   <a href="#">-->
-            <!--   <i class='bx bx-heart'></i>-->
-            <!--   <span class="links_name">Saved</span>-->
-            <!--   </a>-->
-            <!--   <span class="tooltip">Saved</span>-->
-            <!--</li>-->
-            <!--<li>-->
-            <!--   <a href="#">-->
-            <!--   <i class='bx bx-cog'></i>-->
-            <!--   <span class="links_name">Setting</span>-->
-            <!--   </a>-->
-            <!--   <span class="tooltip">Setting</span>-->
-            <!--</li>-->
+
             <li id="uploadNewPdfBtn">
                <a href="#">
                <i class='bx bx-upload'></i>
@@ -1961,11 +1933,13 @@ function acceptProcessedText(feature, processedText) {
 function replaceWithSimplifiedText(simplifiedText) {
     console.log('replaceWithSimplifiedText called');
     console.log('Simplified text:', simplifiedText);
+
     if (!currentSelectedRange) {
         console.error('No selection range found');
         alert('Please select some text before simplifying.');
         return;
     }
+
     const fullSpanHtml = window.lastFullSpanHtml;
     const unselectedText = window.lastUnselectedText;
     console.log('Full span HTML:', fullSpanHtml);
@@ -2020,15 +1994,45 @@ function replaceWithSimplifiedText(simplifiedText) {
     document.body.appendChild(containerDiv);
 
     console.log('Overlay and simplified content added to the document');
+
     undoStack.push({
         range: currentSelectedRange.cloneRange(),
         originalHTML: fullSpanHtml,
         simplifiedHTML: containerDiv.outerHTML,
-        overlayHTML: overlayDiv.outerHTML
+        overlayHTML: overlayDiv.outerHTML,
+        containerDiv: containerDiv,  
+        overlayDiv: overlayDiv       
     });
+
     updateUndoRedoButtons();
 
     console.log('Simplification complete');
+}
+
+function undoLastAction() {
+    if (undoStack.length > 0) {
+        const lastAction = undoStack.pop();
+        if (lastAction.containerDiv && lastAction.overlayDiv) {
+
+            lastAction.containerDiv.remove();
+            lastAction.overlayDiv.remove();
+
+            const selection = window.getSelection();
+            selection.removeAllRanges();
+            selection.addRange(lastAction.range);
+        }
+
+        updateUndoRedoButtons();
+    } else {
+        console.log('Nothing to undo');
+    }
+}
+
+function updateUndoRedoButtons() {
+    const undoButton = document.getElementById('undoButton'); 
+    if (undoButton) {
+        undoButton.disabled = undoStack.length === 0;
+    }
 }
 
 document.addEventListener('mouseup', function(e) {
@@ -2129,43 +2133,164 @@ function getTextNodesIn(node) {
     return textNodes;
 }
 
-         function createStickyNote(feature, content) {
-         const noteId = 'note-' + Date.now();
-         const noteColor = feature === 'dp2' ? 'note-green' : 'note-levendor';
-         const noteTitle = feature === 'dp2' ? 'Structure' : 'Essential';
-         const currentPage = getCurrentPage();
+function createStickyNote(feature, content) {
+    const noteId = 'note-' + Date.now();
+    const noteColor = feature === 'dp2' ? 'note-green' : 'note-levendor';
+    const noteTitle = feature === 'dp2' ? 'Structure' : 'Essential';
+    const currentPage = getCurrentPage();
 
-         const noteHTML = `
-             <div class="noteHolder ${noteColor}" id="${noteId}" data-page="${currentPage}">
-                 <div class="note-header">
-                     <h4>${noteTitle}</h4>
-                     <div class="note-actions">
-                         <button class="btn btn-edit" title="Edit"><i class="fas fa-edit"></i></button>
-                         <button class="btn btn-delete" title="Delete"><i class="fas fa-trash"></i></button>
-                     </div>
-                 </div>
-                 <div class="note-content">${content}</div>
-             </div>
-         `;
+    const formattedContent = formatStickyNoteContent(content, feature);
 
-         const notesContainer = document.getElementById('stickyNotesContainer') || createNotesContainer();
-         notesContainer.insertAdjacentHTML('beforeend', noteHTML);
+    const noteHTML = `
+        <div class="noteHolder ${noteColor}" id="${noteId}" data-page="${currentPage}">
+            <div class="note-header">
+                <h4>${noteTitle}</h4>
+                <div class="note-actions">
+                    <button class="btn btn-edit" title="Edit"><i class="fas fa-edit"></i></button>
+                    <button class="btn btn-delete" title="Delete"><i class="fas fa-trash"></i></button>
+                </div>
+            </div>
+            <div class="note-content">${formattedContent}</div>
+        </div>
+    `;
 
-         const noteElement = document.getElementById(noteId);
-         setupNoteEventListeners(noteElement);
+    const notesContainer = document.getElementById('stickyNotesContainer') || createNotesContainer();
+    notesContainer.insertAdjacentHTML('beforeend', noteHTML);
 
-         const selection = window.getSelection();
-         if (selection.rangeCount > 0) {
-             const range = selection.getRangeAt(0);
-             const rect = range.getBoundingClientRect();
-             noteElement.style.position = 'absolute';
-             noteElement.style.left = `${document.documentElement.clientWidth - 270}px`; 
-             noteElement.style.top = `${rect.top + window.pageYOffset}px`;
-         }
+    const noteElement = document.getElementById(noteId);
+    setupNoteEventListeners(noteElement);
 
-         updateNotesVisibility();
-         return noteElement;
-         }
+    const selection = window.getSelection();
+    if (selection.rangeCount > 0) {
+        const range = selection.getRangeAt(0);
+        const rect = range.getBoundingClientRect();
+        noteElement.style.position = 'absolute';
+        noteElement.style.left = `${document.documentElement.clientWidth - 270}px`; 
+        noteElement.style.top = `${rect.top + window.pageYOffset}px`;
+    }
+
+    updateNotesVisibility();
+    return noteElement;
+}
+
+function formatStickyNoteContent(content, feature) {
+    if (feature === 'dp2') {
+        return formatStructuredContent(content);
+    } else if (feature === 'dp3') {
+        return formatEssentialContent(content);
+    }
+    return content; 
+}
+function formatStructuredContent(content) {
+    console.log("XXXXXXXKKKKKK");
+    const lines = content.split('\n');  
+    console.log(lines);
+    let formattedContent = '<div class="structured-content">';
+
+    lines.forEach(line => {
+        line = line.trim();
+
+        if (line) {
+
+            const formattedLine = line.replace(/\*([^*]+)\*/g, '<strong>$1</strong>');
+
+            formattedContent += `<p>${formattedLine}</p>`;
+        }
+    });
+
+    formattedContent += '</div>';
+
+    return formattedContent;
+}
+
+function formatEssentialContent(content) {
+    console.log("PPPPXXXXXXXKKKKKK");
+    const lines = content.split(/(?=-)/);  
+
+    console.log(lines);
+
+    let formattedContent = '<div class="essential-content">';
+    let inList = false;
+
+    lines.forEach(line => {
+        line = line.trim();
+
+        if (line.match(/^\d+\./)) {
+            if (!inList) {
+                formattedContent += '<ol>';  
+                inList = true;
+            }
+            formattedContent += `<li>${line.substring(line.indexOf('.') + 1).trim()}</li>`;
+        } else {
+            if (inList) {
+                formattedContent += '</ol>';  
+                inList = false;
+            }
+
+            if (line) {
+
+                if (line.startsWith('**') && line.endsWith('**')) {
+                    formattedContent += `<h5>${line.slice(2, -2)}</h5>`;  
+                } else if (line.startsWith('-')) {  
+                    formattedContent += `<p>${line.trim()}</p>`;  
+                } else {
+                    formattedContent += `<p>${line}</p>`;  
+                }
+            }
+        }
+    });
+
+    if (inList) {
+        formattedContent += '</ol>';  
+    }
+
+    return formattedContent + '</div>';
+}
+
+const stickyNoteStyles = `
+.noteHolder .structured-content,
+.noteHolder .essential-content {
+    font-size: 14px;
+    line-height: 1.4;
+    max-height: 300px;
+    overflow-y: auto;
+}
+
+.noteHolder .structured-content ul,
+.noteHolder .essential-content ol {
+    padding-left: 20px;
+    margin: 10px 0;
+}
+
+.noteHolder .structured-content li,
+.noteHolder .essential-content li {
+    margin-bottom: 5px;
+}
+
+.noteHolder .structured-content p,
+.noteHolder .essential-content p {
+    margin-bottom: 10px;
+}
+
+.noteHolder h5 {
+    font-size: 16px;
+    font-weight: bold;
+    margin-top: 15px;
+    margin-bottom: 10px;
+}
+
+.noteHolder .structured-content ul {
+    list-style-type: disc;
+}
+
+.noteHolder .essential-content ol {
+    list-style-type: decimal;
+}
+`;
+
+const styleElement = document.createElement('style');
+styleElement.textContent = stickyNoteStyles;
+document.head.appendChild(styleElement);
          function setupNoteEventListeners(noteElement) {
              let isDraggable = false;
 
@@ -3620,20 +3745,31 @@ function getExactSelection() {
      function acceptProcessedContent(button, feature) {
         console.log('acceptProcessedContent called with feature:', feature);
         const container = button.closest('.processed-content');
-        const processedText = container.querySelector('.processed-text').textContent;
 
         if (feature === 'dp1') {
+            const processedText = container.querySelector('.processed-text').textContent;
             console.log('Simplify feature detected. Updating text in PDF viewer.');
             replaceWithSimplifiedText(processedText);
         } else if (feature === 'dp2' || feature === 'dp3') {
             console.log('Creating sticky note for feature:', feature);
-            createStickyNote(feature, processedText);
-        } else {
-            console.log('Feature not handled:', feature);
-        }
 
-        closeProcessedContent(button);
-}
+            let processedText;
+
+            if (feature === 'dp2') {
+                processedText = container.querySelector('.processed-text').innerHTML;  
+                console.log(processedText);
+            } else if (feature === 'dp3') {
+                processedText = container.querySelector('.processed-text').textContent;  
+            }
+
+            createStickyNote(feature, processedText);
+        }
+         else {
+                    console.log('Feature not handled:', feature);
+                }
+
+                closeProcessedContent(button);
+        }
 
          function closeProcessedContentDialog(button) {
              const dialogContainer = button.closest('.processed-content-dialog');
