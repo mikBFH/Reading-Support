@@ -1,5 +1,5 @@
 
-# Reading Comprehension Study Platform
+# Reading Comprehension Study
 
 This code base is designed to conduct a reading comprehension study, providing an interactive environment for participants to read passages, answer questions, and utilize AI-assisted tools for text analysis.
 
