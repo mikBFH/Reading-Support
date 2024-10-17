@@ -40,7 +40,7 @@
    }
 
    $env_path = '/home/textgmpa/readingparadox.com/.env';
-
+   $wordCount = isset($_POST['wordCount']) ? intval($_POST['wordCount']) : null;
    loadEnv($env_path);
 
    $db_user = getenv('DB_USER');
@@ -97,9 +97,30 @@
 
    function processWithAI($text, $feature, $userQuestion = '', $description = '', $paragraph = '') {
        switch ($feature) {
-           case 'dp1':
-               $prompt = "Convert the input text into a simpler version so that it is understandable for a person without specialist knowledge. Technical terms are explained. Use clearer formulations and avoid complicated terms. The text should still remain precise and factual but be easier for laypeople to understand. Only return the converted output text without adding anything to it. If you replace heavy words, write them after the new light words in brackets.";
-               break;
+
+            case 'dp1':
+                $originalWordCount = str_word_count($text);
+                $wordCountPrompt = "Your simplified version MUST contain EXACTLY {$originalWordCount} words, matching the original word count. This is a strict requirement.";
+                $prompt = "Simplify the following text, making it easier to understand for a person without specialist knowledge. Adhere to these rules strictly:
+
+                    1. Maintain EXACTLY two words less as the original text. This is crucial and non-negotiable and not less do not include abbreviations e.g SA for Situational Awareness.
+                    2. Replace complex terms with simpler alternatives without adding explanations but should be formal, avoid shortening words such as don't it should be do not, make sure the language is formal.
+                    3. Use clearer formulations and avoid complicated words.
+                    4. The text should remain precise and factual but be more accessible for individuals without specialized knowledge.
+                    5. Do not add any explanations or examples that were not present in the original text.
+                    6. {$wordCountPrompt}
+                    7. After simplification, count the words in your simplified version to ensure it matches the original count exactly.
+                    8. If the simplified version is one word short or over, adjust your simplification to fit the exact word count.
+                    9. Count contracted words (such as 'do not', 'it is') as their full forms, matching the word count of the original text.
+                    10. Count hyphenated words as they are counted in the original text.
+                    11. If simplification while maintaining the exact word count is not feasible, return the original text unchanged.
+                    12. Verify your word count meticulously before submitting your response.
+
+                    Your response MUST be in the following format:
+                    [your simplified version here]
+
+                    Do not include any other text or explanations in your response.";
+                break;
            case 'dp2':
                $prompt = "Convert the input text into a structured version, ensuring that it becomes more accessible to the reader. For each distinct section of content, insert a space. Additionally, provide a three-word summary at the start of every new content part to give the reader a quick understanding of the topic being discussed. Make all important words bold by enclosing them in asterisks (*). Return only the converted and structured output text without any additional commentary or instructions.";
                break;
@@ -125,31 +146,34 @@
        }
 
        $full_prompt = $prompt . "\n\nSelected text: " . $text . "\n\nFull context: " . $paragraph;
+      if (isset($wordCount) && $wordCount !== null) {
+            $full_prompt .= "\n\nWord count: " . $wordCount;
+        }
 
        return callOpenAI($full_prompt);
    }
 
-   if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['action'] === 'processText') {
-       $text = $_POST['text'] ?? '';
-       $feature = $_POST['feature'] ?? '';
-       $paragraph = $_POST['paragraph'] ?? '';
-       $userId = $_POST['userId'] ?? '';
+    if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['action'] === 'processText') {
+        $text = $_POST['text'] ?? '';
+        $feature = $_POST['feature'] ?? '';
+        $paragraph = $_POST['paragraph'] ?? '';
+        $userId = $_POST['userId'] ?? '';
+        $wordCount = isset($_POST['wordCount']) ? intval($_POST['wordCount']) : null;
 
-       if (empty($text) || empty($feature)) {
-           echo json_encode(['error' => 'Missing required parameters']);
-           exit;
-       }
+        if (empty($text) || empty($feature)) {
+            echo json_encode(['error' => 'Missing required parameters']);
+            exit;
+        }
 
-       try {
-           $processed_text = processWithAI($text, $feature, '', '', $paragraph);
-           echo $processed_text;
-       } catch (Exception $e) {
-           echo json_encode(['error' => $e->getMessage()]);
-       }
+        try {
+            $processed_text = processWithAI($text, $feature, '', '', $paragraph, $wordCount);
+            echo $processed_text;
+        } catch (Exception $e) {
+            echo json_encode(['error' => $e->getMessage()]);
+        }
 
-       exit;
-   }
-
+        exit;
+    }   
    function handlePDFUpload() {
        error_log("handlePDFUpload called");
        if (isset($_FILES['pdfFile'])) {
@@ -652,7 +676,7 @@
          transform-origin: 0% 0%;
          background: white;
          z-index: 2;
-         font-family: "CMU Concrete", san-serif !important;
+
          }
          br {
          display: none;
@@ -1227,6 +1251,14 @@
          justify-content: space-between;
          align-items: center;
          }
+     .simplified-highlight {
+    background-color: yellow !important;
+    color: black !important;
+    opacity: 1 !important;
+    display: inline !important;
+    position: absolute !important; 
+    z-index: 1 !important; 
+}
          .chat-messages {
          flex-grow: 1;
          overflow-y: auto;
@@ -1331,39 +1363,39 @@
             <i class='bx bx-menu' id="btn"></i>
          </div>
          <ul class="nav-list">
-            <li>
-               <i class='bx bx-search'></i>
-               <input type="text" placeholder="Search...">
-               <span class="tooltip">Search</span>
-            </li>
-            <li>
-               <a href="#">
-               <i class='bx bx-user'></i>
-               <span class="links_name">User</span>
-               </a>
-               <span class="tooltip">User</span>
-            </li>
-            <li>
-               <a href="#">
-               <i class='bx bx-folder'></i>
-               <span class="links_name">Library</span>
-               </a>
-               <span class="tooltip">Library</span>
-            </li>
-            <li>
-               <a href="#">
-               <i class='bx bx-heart'></i>
-               <span class="links_name">Saved</span>
-               </a>
-               <span class="tooltip">Saved</span>
-            </li>
-            <li>
-               <a href="#">
-               <i class='bx bx-cog'></i>
-               <span class="links_name">Setting</span>
-               </a>
-               <span class="tooltip">Setting</span>
-            </li>
+            <!--<li>-->
+            <!--   <i class='bx bx-search'></i>-->
+            <!--   <input type="text" placeholder="Search...">-->
+            <!--   <span class="tooltip">Search</span>-->
+            <!--</li>-->
+            <!--<li>-->
+            <!--   <a href="#">-->
+            <!--   <i class='bx bx-user'></i>-->
+            <!--   <span class="links_name">User</span>-->
+            <!--   </a>-->
+            <!--   <span class="tooltip">User</span>-->
+            <!--</li>-->
+            <!--<li>-->
+            <!--   <a href="#">-->
+            <!--   <i class='bx bx-folder'></i>-->
+            <!--   <span class="links_name">Library</span>-->
+            <!--   </a>-->
+            <!--   <span class="tooltip">Library</span>-->
+            <!--</li>-->
+            <!--<li>-->
+            <!--   <a href="#">-->
+            <!--   <i class='bx bx-heart'></i>-->
+            <!--   <span class="links_name">Saved</span>-->
+            <!--   </a>-->
+            <!--   <span class="tooltip">Saved</span>-->
+            <!--</li>-->
+            <!--<li>-->
+            <!--   <a href="#">-->
+            <!--   <i class='bx bx-cog'></i>-->
+            <!--   <span class="links_name">Setting</span>-->
+            <!--   </a>-->
+            <!--   <span class="tooltip">Setting</span>-->
+            <!--</li>-->
             <li id="uploadNewPdfBtn">
                <a href="#">
                <i class='bx bx-upload'></i>
@@ -1620,135 +1652,194 @@
              return text.trim();
          }
 
-         window.processText = function(feature, event, source = 'readingToolsMenu') {
-             console.log('processText called with feature:', feature, 'source:', source);
-             if (event) {
-                 event.preventDefault();
-                 event.stopPropagation();
-             }
+       window.processText = function(feature, event, source = 'readingToolsMenu') {
+        const selectedText = lastSelectedText;
+        let wordCount = selectedText ? selectedText.trim().split(/\s+/).length : 0;
+        console.log('processText called with feature:', feature, 'source:', source);
+        if (event) {
+            event.preventDefault();
+            event.stopPropagation();
+        }
 
-             const loadingOverlay = document.getElementById('ai-loading-overlay');
-             const loadingMessage = document.getElementById('ai-loading-message');
+        const loadingOverlay = document.getElementById('ai-loading-overlay');
+        const loadingMessage = document.getElementById('ai-loading-message');
 
-             if (!loadingOverlay || !loadingMessage) {
-                 console.error('Loading elements not found');
-                 alert('An error occurred. Please refresh the page and try again.');
-                 return;
-             }
+        if (!loadingOverlay || !loadingMessage) {
+            console.error('Loading elements not found');
+            alert('An error occurred. Please refresh the page and try again.');
+            return;
+        }
 
-             const messages = [
-                 "Hold on, I'm thinking...",
-                 "Just a sec, processing your request...",
-                 "Hmm, let me ponder this for a moment...",
-                 "Crunching the data, won't be long!",
-                 "Consulting my virtual brain cells...",
-                 "Simplifying... It's harder than it looks!",
-                 "Transforming complex into simple... Loading..."
-             ];
-             loadingMessage.textContent = messages[Math.floor(Math.random() * messages.length)];
+        const messages = [
+            "Hold on, I'm thinking...",
+            "Just a sec, processing your request...",
+            "Hmm, let me ponder this for a moment...",
+            "Crunching the data, won't be long!",
+            "Consulting my virtual brain cells...",
+            "Simplifying... It's harder than it looks!",
+            "Transforming complex into simple... Loading...",
+            "One moment, gathering all the pieces...",
+            "Please wait, pulling the right strings...",
+            "Decoding your query... Give me a bit.",
+            "Working through the details... Patience!",
+            "Analyzing the information... Almost there.",
+            "Running some calculations, stay with me...",
+            "Figuring this out for you... Just a bit longer!",
+            "Mulling over the possibilities... Processing...",
+            "Turning thoughts into answers... Almost done.",
+            "Synthesizing the solution... Hang tight!",
+            "Breaking it down, layer by layer... Hold on.",
+            "Rewiring neurons for a solution... Give me a second.",
+            "Piecing together the answer... Won't take long.",
+            "Thinking deeply about this one... Processing...",
+            "I'm on it! Crafting the perfect response...",
+            "Reaching into the depths of data... One moment!",
+            "Generating insights... Just a bit more time.",
+            "Retrieving the most relevant details... Hold tight.",
+            "Let me dig into this... Almost ready!",
+            "Hang on while I connect the dots...",
+            "Shuffling through data points... Give me a sec.",
+            "Extracting meaningful patterns... Just a little longer.",
+            "Processing your input, please be patient...",
+            "Curating a thoughtful response... Stay with me.",
+            "Just making sure everything's correct... Almost there!",
+            "Decoding the complexities... One moment.",
+            "On it! Sorting through the info...",
+            "Translating thought into output... Hang on.",
+            "Running some logical checks... Almost ready!",
+            "Evaluating the best approach... Bear with me.",
+            "Fine-tuning my response... Won't be long!",
+            "Carefully weighing the options... Almost done.",
+            "Turning my digital gears... Processing.",
+            "Aligning all the pieces... One moment.",
+            "Give me a sec, adjusting the final details...",
+            "Double-checking for accuracy... Processing.",
+            "Making sure I get this right... Just a second.",
+            "Crunching the logic... Stay tuned!",
+            "Almost there! Just ensuring everything lines up.",
+            "Verifying all the information... Give me a moment.",
+            "Running through possibilities... Hold tight!",
+            "In the final stages of processing... Hang on.",
+            "Formulating the perfect answer... Almost finished!"
+        ];
 
-             loadingOverlay.style.display = 'flex';
+        loadingMessage.textContent = messages[Math.floor(Math.random() * messages.length)];
 
-             dpCounts[feature]++;
+        loadingOverlay.style.display = 'flex';
 
-             const selectedText = lastSelectedText;
-             currentSelectedRange = lastSelectedRange;
+        dpCounts[feature]++;
 
-             console.log('Selected text:', selectedText);
-             console.log('Selected text length:', selectedText.length);
+        currentSelectedRange = lastSelectedRange;
 
-             if (!selectedText) {
-                 console.error('No text selected');
-                 loadingOverlay.style.display = 'none';
-                 alert('Please select some text before processing.');
-                 return;
-             }
+        console.log('Selected text:', selectedText);
+        console.log('Selected text length:', selectedText.length);
 
-             if (!currentSelectedRange) {
-                 console.error('No range selected');
-                 loadingOverlay.style.display = 'none';
-                 alert('An error occurred while processing the selection. Please try again.');
-                 return;
-             }
+        if (!selectedText) {
+            console.error('No text selected');
+            loadingOverlay.style.display = 'none';
+            alert('Please select some text before processing.');
+            return;
+        }
 
-             console.log('Current selected range:', currentSelectedRange);
-             const paragraph = getEntireParagraph(currentSelectedRange);
-             const currentTask = getCurrentTask();
-             const currentPage = getCurrentPage();
+        if (!currentSelectedRange) {
+            console.error('No range selected');
+            loadingOverlay.style.display = 'none';
+            alert('An error occurred while processing the selection. Please try again.');
+            return;
+        }
 
-             console.log('Current task:', currentTask);
-             console.log('Current page:', currentPage);
+        console.log('Current selected range:', currentSelectedRange);
+        const paragraph = getEntireParagraph(currentSelectedRange);
+        const currentTask = getCurrentTask();
+        const currentPage = getCurrentPage();
 
-             if (source === 'readingToolsMenu') {
+        console.log('Current task:', currentTask);
+        console.log('Current page:', currentPage);
 
-                 fetch('', {
-                     method: 'POST',
-                     headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-                     body: 'action=processText' +
-                           '&text=' + encodeURIComponent(selectedText) +
-                           '&feature=' + encodeURIComponent(feature) +
-                           '&paragraph=' + encodeURIComponent(paragraph) +
-                           '&task=' + encodeURIComponent(currentTask) +
-                           '&page=' + encodeURIComponent(currentPage) +
-                           '&userId=' + encodeURIComponent(userId)
-                 })
-                 .then(response => response.text())
-                 .then(rawResponse => {
-                     console.log('Received raw response:', rawResponse);
-                     const processedText = extractProcessedText(rawResponse);
-                     console.log('Extracted processed text:', processedText);
-                     loadingOverlay.style.display = 'none';
-                     if (feature === 'dp4') {
-                         showAnalysisInterface(processedText);
-                     } else {
-                         const formattedText = formatProcessedText(processedText, feature);
-                         try {
-                             showProcessingPanel(feature, formattedText);
-                         } catch (error) {
-                             console.error('Error in showProcessingPanel:', error);
-                             alert('An error occurred while displaying the processed content. Please try again.');
-                         }
-                     }
-                     logInteraction('process_text', {
-                         feature: feature,
-                         selectedText: selectedText,
-                         processedText: processedText,
-                         task: getCurrentTask(),
-                         page: getCurrentPage(),
-                         aiResponse: processedText
-                     });
-                 })
-                 .catch(error => {
-                     console.error('Error in fetch:', error);
-                     loadingOverlay.style.display = 'none';
-                     alert('An error occurred while processing the text. Please try again.');
-                 });
-             } else if (source === 'floatingToolbar') {
-                 fetch('', {
-                     method: 'POST',
-                     headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-                     body: 'action=processText' +
-                           '&text=' + encodeURIComponent(selectedText) +
-                           '&feature=' + encodeURIComponent(feature)
-                 })
-                 .then(response => response.text())
-                 .then(processedText => {
-                     loadingOverlay.style.display = 'none';
-                     if (feature === 'dp4') {
-                         showAnalysisInterface(processedText);
-                     } else {
-                         const formattedText = formatProcessedText(processedText, feature);
-                         showProcessedContent(formattedText, feature);
-                     }
-                 })
-                 .catch(error => {
-                     console.error('Error:', error);
-                     loadingOverlay.style.display = 'none';
-                     alert('An error occurred while processing the text. Please try again.');
-                 });
-             }
-         };
+        let pageContent = '';
+        if (feature === 'dp4') {
+            pageContent = getPageContent(currentPage);
+            console.log('Page content for DP4:', pageContent);
+        }
 
+        if (source === 'readingToolsMenu') {
+            fetch('', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+                body: 'action=processText' +
+                      '&text=' + encodeURIComponent(selectedText) +
+                      '&feature=' + encodeURIComponent(feature) +
+                      '&paragraph=' + encodeURIComponent(paragraph) +
+                      '&userId=' + encodeURIComponent(userId) +
+                      '&wordCount=' + encodeURIComponent(wordCount) +
+                      (feature === 'dp4' ? '&pageContent=' + encodeURIComponent(pageContent) : '')
+            })
+            .then(response => response.text())
+            .then(rawResponse => {
+                console.log('Received raw response:', rawResponse);
+                const processedText = extractProcessedText(rawResponse);
+                console.log('Extracted processed text:', processedText);
+                loadingOverlay.style.display = 'none';
+                if (feature === 'dp4') {
+                    showAnalysisInterface(processedText);
+                } else {
+                    const formattedText = formatProcessedText(processedText, feature);
+                    try {
+                        showProcessingPanel(feature, formattedText);
+                    } catch (error) {
+                        console.error('Error in showProcessingPanel:', error);
+                        alert('An error occurred while displaying the processed content. Please try again.');
+                    }
+                }
+                logInteraction('process_text', {
+                    feature: feature,
+                    selectedText: selectedText,
+                    processedText: processedText,
+                    task: getCurrentTask(),
+                    page: getCurrentPage(),
+                    aiResponse: processedText
+                });
+            })
+            .catch(error => {
+                console.error('Error in fetch:', error);
+                loadingOverlay.style.display = 'none';
+                alert('An error occurred while processing the text. Please try again.');
+            });
+        } else if (source === 'floatingToolbar') {
+            fetch('', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+                body: 'action=processText' +
+                     '&text=' + encodeURIComponent(selectedText) +
+                     '&feature=' + encodeURIComponent(feature) +
+                     (feature === 'dp4' ? '&pageContent=' + encodeURIComponent(pageContent) : '')
+            })
+            .then(response => response.text())
+            .then(processedText => {
+                loadingOverlay.style.display = 'none';
+                if (feature === 'dp4') {
+                    showAnalysisInterface(processedText);
+                } else {
+                    const formattedText = formatProcessedText(processedText, feature);
+                    showProcessedContent(formattedText, feature);
+                }
+            })
+            .catch(error => {
+                console.error('Error:', error);
+                loadingOverlay.style.display = 'none';
+                alert('An error occurred while processing the text. Please try again.');
+            });
+        }
+    };
+
+    function getPageContent(pageNumber) {
+        const pageElement = document.querySelector(`.page[data-page-number="${pageNumber}"]`);
+        if (!pageElement) {
+            console.error('Page element not found');
+            return '';
+        }
+        return pageElement.innerText;
+    }      
          function formatProcessedText(text) {
 
              text = text.replace(/\*(.*?)\*/g, '<strong>$1</strong>');
@@ -1826,13 +1917,217 @@
              }
          }
 
-         function acceptProcessedText(feature, processedText) {
-             if (feature === 'dp2' || feature === 'dp3') { 
-                 createStickyNote(feature, processedText);
-             }
+function parseSimplifiedResponse(response) {
+    console.log('Raw AI response:', response);
 
-             closeProcessingPanel();
-         }
+    const simplifiedMatch = response.match(/SIMPLIFIED:\s*([\s\S]*)/);
+
+    if (simplifiedMatch) {
+        const simplified = simplifiedMatch[1].trim();
+        console.log('Simplified text:', simplified);
+        return simplified;
+    }
+
+    console.error('Unable to parse response:', response);
+    return null;
+}
+
+function acceptProcessedText(feature, processedText) {
+    console.log('acceptProcessedText called with feature:', feature);
+
+    if (typeof processedText !== 'string' || processedText.trim() === '') {
+        console.error('Invalid processedText:', processedText);
+        alert('An error occurred while processing the text. Please try again.');
+        return;
+    }
+
+    if (feature === 'dp1') {
+        console.log('Simplify feature detected. Updating text in PDF viewer.');
+        const simplifiedText = parseSimplifiedResponse(processedText);
+        if (simplifiedText) {
+            handleSimplification(simplifiedText);
+        } else {
+            alert('An error occurred while processing the simplified text. Please try again.');
+        }
+    } else if (feature === 'dp2' || feature === 'dp3') {
+        console.log('Creating sticky note for feature:', feature);
+        createStickyNote(feature, processedText);
+    } else {
+        console.log('Feature not handled:', feature);
+    }
+    closeProcessingPanel();
+}
+
+function replaceWithSimplifiedText(simplifiedText) {
+    console.log('replaceWithSimplifiedText called');
+    console.log('Simplified text:', simplifiedText);
+    if (!currentSelectedRange) {
+        console.error('No selection range found');
+        alert('Please select some text before simplifying.');
+        return;
+    }
+    const fullSpanHtml = window.lastFullSpanHtml;
+    const unselectedText = window.lastUnselectedText;
+    console.log('Full span HTML:', fullSpanHtml);
+    console.log('Unselected text:', unselectedText);
+
+    const selectionRect = currentSelectedRange.getBoundingClientRect();
+    console.log('Selection rectangle from global info:', selectionRect);
+    console.log('Selection dimensions:');
+    console.log('Width:', selectionRect.width);
+    console.log('Height:', selectionRect.height);
+    console.log('Left:', selectionRect.left);
+    console.log('Top:', selectionRect.top);
+
+    const overlayDiv = document.createElement('div');
+    overlayDiv.style.position = 'absolute';
+    overlayDiv.style.left = `${selectionRect.left + window.pageXOffset}px`;
+    overlayDiv.style.top = `${selectionRect.top + window.pageYOffset}px`;
+    overlayDiv.style.width = `${selectionRect.width}px`;
+    overlayDiv.style.height = `${selectionRect.height}px`;
+    overlayDiv.style.backgroundColor = 'white';
+    overlayDiv.style.zIndex = '1000';  
+
+    const containerDiv = document.createElement('div');
+    containerDiv.style.position = 'absolute';
+    containerDiv.style.left = `${selectionRect.left + window.pageXOffset}px`;
+    containerDiv.style.top = `${selectionRect.top + window.pageYOffset}px`;
+    containerDiv.style.width = `${selectionRect.width}px`;
+    containerDiv.style.height = `${selectionRect.height}px`;
+    containerDiv.style.zIndex = '1001';  
+    containerDiv.style.overflow = 'hidden';
+
+    const simplifiedParagraph = document.createElement('p');
+    simplifiedParagraph.style.margin = '0';
+    simplifiedParagraph.style.padding = '0';
+    simplifiedParagraph.style.width = '100%';
+    simplifiedParagraph.style.height = '100%';
+    simplifiedParagraph.style.overflow = 'hidden';
+    simplifiedParagraph.style.fontSize = '13.4496px';  
+    simplifiedParagraph.style.fontFamily = 'sans-serif';
+    simplifiedParagraph.style.lineHeight = '1.2';  
+    simplifiedParagraph.style.color = 'black';
+    simplifiedParagraph.style.backgroundColor = 'yellow';
+
+    const fullSimplifiedText = simplifiedText + ' ' + unselectedText;
+    simplifiedParagraph.textContent = fullSimplifiedText;
+
+    containerDiv.appendChild(simplifiedParagraph);
+
+    console.log('New container structure:', containerDiv.outerHTML);
+
+    document.body.appendChild(overlayDiv);
+    document.body.appendChild(containerDiv);
+
+    console.log('Overlay and simplified content added to the document');
+    undoStack.push({
+        range: currentSelectedRange.cloneRange(),
+        originalHTML: fullSpanHtml,
+        simplifiedHTML: containerDiv.outerHTML,
+        overlayHTML: overlayDiv.outerHTML
+    });
+    updateUndoRedoButtons();
+
+    console.log('Simplification complete');
+}
+
+document.addEventListener('mouseup', function(e) {
+    if (isDialogExpanded || isDragging) {
+        return; 
+    }
+    let selectedText = getSelectedText();
+    console.log('Selected text in mouseup:', selectedText);
+    console.log('Selected text length in mouseup:', selectedText.length);
+
+    if (selectedText.length > 0) {
+        let selection = window.getSelection();
+        let selectedRange = selection.rangeCount > 0 ? selection.getRangeAt(0) : null;
+        let range = selection.getRangeAt(0);
+        let selectedHtml = getSelectedHtml(range);
+        if (selectedRange) {
+            console.log('Selected range:', selectedRange);
+            const rect = selectedRange.getBoundingClientRect();
+            console.log('Range rect:', rect);
+
+            let startContainer = range.startContainer;
+            let endContainer = range.endContainer;
+
+            while (startContainer && startContainer.nodeName !== 'SPAN') {
+                startContainer = startContainer.parentNode;
+            }
+            while (endContainer && endContainer.nodeName !== 'SPAN') {
+                endContainer = endContainer.parentNode;
+            }
+
+            if (startContainer && endContainer) {
+                let fullSpanContent = '';
+                let currentSpan = startContainer;
+                while (currentSpan) {
+                    fullSpanContent += currentSpan.outerHTML + '\n';
+                    if (currentSpan === endContainer) break;
+                    currentSpan = currentSpan.nextElementSibling;
+                }
+                console.log('Full span content (including selected and unselected):', fullSpanContent);
+                window.lastFullSpanHtml = fullSpanContent;
+
+                let fullText = startContainer.textContent;
+                if (startContainer !== endContainer) {
+                    currentSpan = startContainer.nextElementSibling;
+                    while (currentSpan && currentSpan !== endContainer) {
+                        fullText += currentSpan.textContent;
+                        currentSpan = currentSpan.nextElementSibling;
+                    }
+                    fullText += endContainer.textContent;
+                }
+                let unselectedText = fullText.replace(selectedText, '');
+                console.log('Unselected text:', unselectedText);
+                window.lastUnselectedText = unselectedText;
+            }
+
+            lastSelectedText = selectedText;
+            lastSelectedRange = selectedRange;
+            createHighlightBox(rect);
+
+        }
+    }
+});
+
+function getTextWidth(text, font) {
+    const canvas = getTextWidth.canvas || (getTextWidth.canvas = document.createElement("canvas"));
+    const context = canvas.getContext("2d");
+    context.font = font;
+    const metrics = context.measureText(text);
+    return metrics.width;
+}
+
+function captureFullSpanHtml(range) {
+    const startContainer = range.startContainer.parentElement;
+    const endContainer = range.endContainer.parentElement;
+
+    let currentElement = startContainer;
+    let fullHtml = '';
+
+    while (currentElement) {
+        fullHtml += currentElement.outerHTML;
+        if (currentElement === endContainer) break;
+        currentElement = currentElement.nextElementSibling;
+    }
+
+    return fullHtml;
+}
+
+function getTextNodesIn(node) {
+    var textNodes = [];
+    if (node.nodeType == 3) {
+        textNodes.push(node);
+    } else {
+        var children = node.childNodes;
+        for (var i = 0, len = children.length; i < len; ++i) {
+            textNodes.push.apply(textNodes, getTextNodesIn(children[i]));
+        }
+    }
+    return textNodes;
+}
 
          function createStickyNote(feature, content) {
          const noteId = 'note-' + Date.now();
@@ -2496,7 +2791,8 @@
              sendMessage(promptText);
          }, 300);
          }
-         function addMessage(sender, text) {
+         function addMessage(sender, text) { 
+
          const messagesContainer = document.querySelector('.chat-messages');
          const messageElement = document.createElement('div');
          messageElement.className = `message ${sender}`;
@@ -2512,7 +2808,12 @@
                  ? 'align-self: flex-end; background-color: #202654; color: white;' 
                  : 'align-self: flex-start; background-color: white; color: #202654; box-shadow: 0 2px 5px rgba(0,0,0,0.1);'}
          `;
-         messageElement.textContent = text;
+
+            if (sender === 'ai') {
+                simulateTyping(messageElement, text);
+            } else {
+                messageElement.textContent = text;
+            }
          messagesContainer.appendChild(messageElement);
 
          messageElement.offsetHeight;
@@ -2523,6 +2824,22 @@
          messagesContainer.scrollTop = messagesContainer.scrollHeight;
          }
 
+       function simulateTyping(element, text, delay = 30, callback) {
+            let i = 0;
+            element.textContent = ''; 
+
+            function typeNextChar() {
+                if (i < text.length) {
+                    element.textContent += text.charAt(i);
+                    i++;
+                    setTimeout(typeNextChar, delay);
+                } else if (callback) {
+                    callback();
+                }
+            }
+
+            typeNextChar();
+        }
          function closeChatInterface() {
          const chatOverlay = document.getElementById('chat-overlay');
          const pdfViewer = document.getElementById('pdfViewer');
@@ -2539,54 +2856,301 @@
          let lastSelectedText = '';
          let lastSelectedRange = null;
 
-         document.addEventListener('mouseup', function(e) {
-             if (isDialogExpanded || isDragging) {
-                 return; 
-             }
-             let selectedText = getSelectedText();
-             console.log('Selected text in mouseup:', selectedText);
-             console.log('Selected text length in mouseup:', selectedText.length);
+     document.addEventListener('mouseup', function(e) {
+    if (isDialogExpanded || isDragging) {
+        return; 
+    }
+    let selectedText = getSelectedText();
+    console.log('Selected text in mouseup:', selectedText);
+    console.log('Selected text length in mouseup:', selectedText.length);
 
-             if (selectedText.length > 0) {
-                 let selection = window.getSelection();
-                 let selectedRange = selection.rangeCount > 0 ? selection.getRangeAt(0) : null;
+    if (selectedText.length > 0) {
+        let selection = window.getSelection();
+        let selectedRange = selection.rangeCount > 0 ? selection.getRangeAt(0) : null;
+        let range = selection.getRangeAt(0);
+        let selectedHtml = getSelectedHtml(range);
+        if (selectedRange) {
+            console.log('Selected range:', selectedRange);
+            const rect = selectedRange.getBoundingClientRect();
+            console.log('Range rect:', rect);
 
-                 if (selectedRange) {
-                     console.log('Selected range:', selectedRange);
-                     const rect = selectedRange.getBoundingClientRect();
-                     console.log('Range rect:', rect);
+            let startContainer = range.startContainer;
+            let endContainer = range.endContainer;
 
-                     lastSelectedText = selectedText;
-                     lastSelectedRange = selectedRange;
+            while (startContainer && startContainer.nodeName !== 'SPAN') {
+                startContainer = startContainer.parentNode;
+            }
+            while (endContainer && endContainer.nodeName !== 'SPAN') {
+                endContainer = endContainer.parentNode;
+            }
 
-                     if (floatingDialog) {
-                         console.log('Floating dialog found:', floatingDialog);
-                         floatingDialog.style.display = 'block';
-                         floatingDialog.style.left = `${rect.right + window.scrollX}px`;
-                         floatingDialog.style.top = `${rect.top + window.scrollY}px`;
-                         floatingDialog.classList.remove('expanded');
+            if (startContainer && endContainer) {
+                let fullSpanContent = '';
+                let currentSpan = startContainer;
+                while (currentSpan) {
+                    fullSpanContent += currentSpan.outerHTML + '\n';
+                    if (currentSpan === endContainer) break;
+                    currentSpan = currentSpan.nextElementSibling;
+                }
+                console.log('Full span content (including selected and unselected):', fullSpanContent);
+                window.lastFullSpanHtml = fullSpanContent; 
+            }
 
-                         const analysisInterface = document.getElementById('analysisInterface');
-                         const processedText = document.getElementById('processedText');
-                         if (analysisInterface) analysisInterface.style.display = 'none';
-                         if (processedText) processedText.style.display = 'none';
-                         if (colorOptions) colorOptions.style.display = 'block';
+            lastSelectedText = selectedText;
+            lastSelectedRange = selectedRange;
+            createHighlightBox(rect);
 
-                         const featureOptions = floatingDialog.querySelector('.feature-options');
-                         if (featureOptions) featureOptions.style.display = 'flex';
+            if (floatingDialog) {
+                console.log('Floating dialog found:', floatingDialog);
+                floatingDialog.style.display = 'block';
+                floatingDialog.style.left = `${rect.right + window.scrollX}px`;
+                floatingDialog.style.top = `${rect.top + window.scrollY}px`;
+                floatingDialog.classList.remove('expanded');
 
-                         isDialogExpanded = false;
-                     }
-                 } else {
-                     console.error('No range selected in mouseup event');
-                 }
-             } else if (floatingDialog && !floatingDialog.contains(e.target) && floatingDialog.style.display === 'block') {
-                 floatingDialog.style.display = 'none';
-                 isDialogExpanded = false;
-             }
-         });
+                const analysisInterface = document.getElementById('analysisInterface');
+                const processedText = document.getElementById('processedText');
+                if (analysisInterface) analysisInterface.style.display = 'none';
+                if (processedText) processedText.style.display = 'none';
+                if (colorOptions) colorOptions.style.display = 'block';
 
-         if (floatingDialog) {
+                const featureOptions = floatingDialog.querySelector('.feature-options');
+                if (featureOptions) featureOptions.style.display = 'flex';
+
+                isDialogExpanded = false;
+            }
+
+        } else {
+            console.error('No range selected in mouseup event');
+        }
+
+        window.lastSelectedHtml = selectedHtml;
+
+    } else if (floatingDialog && !floatingDialog.contains(e.target) && floatingDialog.style.display === 'block') {
+        floatingDialog.style.display = 'none';
+        isDialogExpanded = false;
+    }
+});    
+
+function createHighlightBox(rect) {
+    const highlightBox = document.createElement('div');
+    highlightBox.className = 'highlight-box';
+    highlightBox.style.position = 'absolute';
+    highlightBox.style.left = `${rect.left + window.pageXOffset}px`;
+    highlightBox.style.top = `${rect.top + window.pageYOffset}px`;
+    highlightBox.style.width = `${rect.width}px`;
+    highlightBox.style.height = `${rect.height}px`;
+    highlightBox.style.border = '2px solid yellow';
+    highlightBox.style.backgroundColor = 'rgba(255, 255, 0, 0.2)';
+    highlightBox.style.pointerEvents = 'none';
+    highlightBox.style.zIndex = '1000';
+
+    document.body.appendChild(highlightBox);
+
+    document.addEventListener('mousedown', function removeHighlight(e) {
+        if (!highlightBox.contains(e.target)) {
+            highlightBox.remove();
+            document.removeEventListener('mousedown', removeHighlight);
+        }
+    });
+}
+
+document.addEventListener('mouseup', function(e) {
+    if (isDialogExpanded || isDragging) {
+        return;
+    }
+    highlightSelection();
+    let selectedText = getSelectedText();
+    console.log('Selected text in mouseup:', selectedText);
+    console.log('Selected text length in mouseup:', selectedText.length);
+
+    if (selectedText.length > 0) {
+        let selection = window.getSelection();
+        let selectedRange = selection.rangeCount > 0 ? selection.getRangeAt(0) : null;
+        let range = selection.getRangeAt(0);
+        let selectedHtml = getSelectedHtml(range);
+        if (selectedRange) {
+            console.log('Selected range:', selectedRange);
+            const rect = selectedRange.getBoundingClientRect();
+            console.log('Range rect:', rect);
+
+            lastSelectedText = selectedText;
+            lastSelectedRange = selectedRange;
+
+            if (floatingDialog) {
+                console.log('Floating dialog found:', floatingDialog);
+                floatingDialog.style.display = 'block';
+                floatingDialog.style.left = `${rect.right + window.scrollX}px`;
+                floatingDialog.style.top = `${rect.top + window.scrollY}px`;
+                floatingDialog.classList.remove('expanded');
+
+                const analysisInterface = document.getElementById('analysisInterface');
+                const processedText = document.getElementById('processedText');
+                if (analysisInterface) analysisInterface.style.display = 'none';
+                if (processedText) processedText.style.display = 'none';
+                if (colorOptions) colorOptions.style.display = 'block';
+
+                const featureOptions = floatingDialog.querySelector('.feature-options');
+                if (featureOptions) featureOptions.style.display = 'flex';
+
+                isDialogExpanded = false;
+            }
+        } else {
+            console.error('No range selected in mouseup event');
+        }
+
+        window.lastSelectedHtml = selectedHtml;
+
+    } else if (floatingDialog && !floatingDialog.contains(e.target) && floatingDialog.style.display === 'block') {
+        floatingDialog.style.display = 'none';
+        isDialogExpanded = false;
+    }
+});
+
+function highlightSelection() {
+    const selectionInfo = getExactSelection();
+    if (!selectionInfo) return;
+
+    const { range, selectedText } = selectionInfo;
+    const textLayer = document.querySelector('.textLayer');
+    if (!textLayer) return;
+
+    const rects = range.getClientRects();
+
+    const boundingBoxContainer = document.createElement('div');
+    boundingBoxContainer.className = 'bounding-box-container';
+    boundingBoxContainer.style.position = 'absolute';
+    boundingBoxContainer.style.pointerEvents = 'none';
+    document.body.appendChild(boundingBoxContainer);
+
+    let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+    Array.from(rects).forEach(rect => {
+        minX = Math.min(minX, rect.left);
+        minY = Math.min(minY, rect.top);
+        maxX = Math.max(maxX, rect.right);
+        maxY = Math.max(maxY, rect.bottom);
+    });
+
+        const width = maxX - minX;
+    const height = maxY - minY;
+
+    console.log('Highlighted area dimensions:');
+    console.log(`Width: ${width}px`);
+    console.log(`Height: ${height}px`);
+
+    const boundingBox = document.createElement('div');
+    boundingBox.className = 'bounding-box';
+    boundingBox.style.position = 'absolute';
+    boundingBox.style.border = '2px solid yellow';
+    boundingBox.style.backgroundColor = 'rgba(255, 255, 0, 0.2)';
+    boundingBox.style.left = `${minX + window.pageXOffset}px`;
+    boundingBox.style.top = `${minY + window.pageYOffset}px`;
+    boundingBox.style.width = `${maxX - minX}px`;
+    boundingBox.style.height = `${maxY - minY}px`;
+    boundingBoxContainer.appendChild(boundingBox);
+
+    boundingBox.dataset.width = width;
+    boundingBox.dataset.height = height;
+
+    verifySelection(boundingBoxContainer, selectedText);
+
+    document.addEventListener('mousedown', function removeBoundingBox(e) {
+        if (!boundingBoxContainer.contains(e.target)) {
+            boundingBoxContainer.remove();
+            document.removeEventListener('mousedown', removeBoundingBox);
+        }
+    });
+}
+
+function verifySelection(container, originalText) {
+    const textLayer = document.querySelector('.textLayer');
+    if (!textLayer) return;
+
+    const boundingBox = container.querySelector('.bounding-box');
+    const boxRect = boundingBox.getBoundingClientRect();
+
+    let selectedText = '';
+    const treeWalker = document.createTreeWalker(textLayer, NodeFilter.SHOW_TEXT);
+    let node;
+
+    while (node = treeWalker.nextNode()) {
+        const range = document.createRange();
+        range.selectNodeContents(node);
+        const rects = range.getClientRects();
+
+        for (let i = 0; i < rects.length; i++) {
+            const rect = rects[i];
+            if (rect.left <= boxRect.right && rect.right >= boxRect.left &&
+                rect.top <= boxRect.bottom && rect.bottom >= boxRect.top) {
+                selectedText += node.textContent.substring(i, i + 1);
+            }
+        }
+    }
+
+    if (selectedText.trim() !== originalText.trim()) {
+        console.warn('Selection mismatch detected. Adjusting...');
+        adjustBoundingBox(container, originalText);
+    }
+}
+
+function adjustBoundingBox(container, originalText) {
+    const textLayer = document.querySelector('.textLayer');
+    if (!textLayer) return;
+
+    const words = originalText.split(/\s+/);
+    let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+
+    words.forEach(word => {
+        const treeWalker = document.createTreeWalker(
+            textLayer,
+            NodeFilter.SHOW_TEXT,
+            { acceptNode: node => node.textContent.includes(word) ? NodeFilter.FILTER_ACCEPT : NodeFilter.FILTER_REJECT }
+        );
+
+        let node;
+        while (node = treeWalker.nextNode()) {
+            const index = node.textContent.indexOf(word);
+            if (index !== -1) {
+                const range = document.createRange();
+                range.setStart(node, index);
+                range.setEnd(node, index + word.length);
+                const rects = range.getClientRects();
+                Array.from(rects).forEach(rect => {
+                    minX = Math.min(minX, rect.left);
+                    minY = Math.min(minY, rect.top);
+                    maxX = Math.max(maxX, rect.right);
+                    maxY = Math.max(maxY, rect.bottom);
+                });
+                break;
+            }
+        }
+    });
+
+    const boundingBox = container.querySelector('.bounding-box');
+    boundingBox.style.left = `${minX + window.pageXOffset}px`;
+    boundingBox.style.top = `${minY + window.pageYOffset}px`;
+    boundingBox.style.width = `${maxX - minX}px`;
+    boundingBox.style.height = `${maxY - minY}px`;
+}
+
+function getExactSelection() {
+    const selection = window.getSelection();
+    if (selection.rangeCount === 0) return null;
+
+    const range = selection.getRangeAt(0);
+    const selectedText = range.toString().trim();
+
+    if (selectedText.length === 0) return null;
+
+    return { range, selectedText };
+}
+
+        function getSelectedHtml(range) {
+            let container = document.createElement('div');
+            container.appendChild(range.cloneContents());
+            return container.innerHTML;
+        }      
+
+        if (floatingDialog) {
              floatingDialog.addEventListener('click', function(e) {
                  e.stopPropagation(); 
              });
@@ -3053,22 +3617,23 @@
              positionDialog(dialogContainer);
          }
 
-         function acceptProcessedContent(button, feature) {
-         console.log('acceptProcessedContent called with feature:', feature);
-         const container = button.closest('.processed-content');
-         console.log('Container found:', container);
-         const processedText = container.querySelector('.processed-text').textContent;
-         console.log('Processed text:', processedText);
+     function acceptProcessedContent(button, feature) {
+        console.log('acceptProcessedContent called with feature:', feature);
+        const container = button.closest('.processed-content');
+        const processedText = container.querySelector('.processed-text').textContent;
 
-         if (feature === 'dp2' || feature === 'dp3') {
-             console.log('Creating sticky note for feature:', feature);
-             createStickyNote(feature, processedText);
-         } else {
-             console.log('Feature not dp2 or dp3, sticky note not created');
-         }
+        if (feature === 'dp1') {
+            console.log('Simplify feature detected. Updating text in PDF viewer.');
+            replaceWithSimplifiedText(processedText);
+        } else if (feature === 'dp2' || feature === 'dp3') {
+            console.log('Creating sticky note for feature:', feature);
+            createStickyNote(feature, processedText);
+        } else {
+            console.log('Feature not handled:', feature);
+        }
 
-         closeProcessedContent(button);
-         }
+        closeProcessedContent(button);
+}
 
          function closeProcessedContentDialog(button) {
              const dialogContainer = button.closest('.processed-content-dialog');
@@ -3299,8 +3864,16 @@
              const scale = window.currentScale || 1.5;
              const viewport = page.getViewport({scale: scale});
 
-             const pageDiv = document.createElement('div');
+             let pageDiv = document.querySelector(`.page:nth-child(${num})`);
+             if (!pageDiv) {
+                    pageDiv = document.createElement('div');
+                    pageDiv.className = 'page';
+                    document.getElementById('pdfViewer').appendChild(pageDiv);
+                } else {
+                    pageDiv.innerHTML = ''; 
+             }
              pageDiv.className = 'page';
+             pageDiv.setAttribute('data-page-number', num);
              const pdfViewer = document.getElementById('pdfViewer');
              pdfViewer.appendChild(pageDiv);
 
@@ -3337,10 +3910,26 @@
                  viewport: viewport,
                  textDivs: []
              });
-
+             applySimplifiedText(textLayerDiv);
              pageDiv.style.width = `${viewport.width}px`;
              pageDiv.style.height = `${viewport.height}px`;
          }
+
+       function applySimplifiedText(textLayerDiv) {
+    console.log('Applying simplified text');
+    const spans = textLayerDiv.querySelectorAll('span');
+    spans.forEach(span => {
+        if (span.classList.contains('simplified-highlight')) {
+            console.log('Found simplified span:', span.outerHTML);
+
+            span.style.backgroundColor = 'yellow';
+            span.style.color = 'black';
+
+            span.style.display = 'inline';
+            span.style.opacity = '1';
+        }
+    });
+}
 
          return {
              setLoading,
